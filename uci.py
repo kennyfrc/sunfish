@@ -11,13 +11,13 @@ import logging
 import argparse
 
 import tools
-import sunfish
+import sunfish_nnue as sunfish
 
 from tools import WHITE, BLACK, Unbuffered
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('module', help='sunfish.py file (without .py)', type=str, default='sunfish', nargs='?')
+    parser.add_argument('module', help='sunfish.py file (without .py)', type=str, default='sunfish_nnue', nargs='?')
     parser.add_argument('--tables', metavar='pst', help='alternative pst table', type=str, default=None)
     args = parser.parse_args()
 

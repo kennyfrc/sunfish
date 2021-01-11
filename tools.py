@@ -3,7 +3,7 @@ import re
 import time
 import sys
 
-import sunfish
+import sunfish_nnue as sunfish
 
 ################################################################################
 # This module contains functions used by test.py and xboard.py.
