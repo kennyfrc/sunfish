@@ -57,7 +57,7 @@ board_parser.py
 
 .venv
 
-networks/
-
-*bin
-*nnue
+networks/*.bin
+networks/*.nnue
+!networks/nn-vdv.nnue
+!networks/gek-net.bin
