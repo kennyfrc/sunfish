@@ -1,4 +1,46 @@
-![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
+## Sunfish NNUE
+
+Sunfish, powered by NNUE.
+
+The best NNUE nets for use with Sunfish are ones trained at lambda 1. Any other net trained below lambda 1 seems to blunder more often.
+
+Kindly see the networks folder to see the strongest nets that I know of that are lambda 1.
+
+In the future, I'll add my own trained nets into the mix.
+
+## Usage
+
+Clone the repository and its submodules
+```
+git clone http://github.com/kennyfrc/sunfishnnue
+git submodule --init --recursive
+```
+
+Go to nnue-probe and compile the NNUE library `libnnueprobe.so`
+```
+cd nnue-probe/src
+make
+```
+
+Ensure that your NNUE net is at the same folder as `./uci.py`
+
+Ensure that your NNUE net is configured in line 18 of `sunfish_nnue.py`
+
+Example:
+```
+nnue.nnue_init(b"gek-net.bin")
+```
+
+In any chess GUI that accepts UCI, use `./uci.py` as the engine.
+
+
+## Credits
+
+* Daniel Shawul for his [NNUE probing library](https://github.com/dshawul/nnue-probe).
+* nodchip and the Stockfish Team for their [NNUE Trainer](https://github.com/nodchip/Stockfish)
+* Thomas Ahle for the original [Sunfish](https://github.com/thomasahle/sunfish)
+
+---
 
 ## Introduction
 Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code! (see [`compressed.py`](https://github.com/thomasahle/sunfish/blob/master/compressed.py)) Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).

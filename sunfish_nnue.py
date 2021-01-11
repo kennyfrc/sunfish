@@ -1,15 +1,23 @@
-#!/usr/bin/env pypy
+#!/usr/local/bin/pypy3
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+from ctypes import *
 import re, sys, time
 from itertools import count
 from collections import namedtuple
+import pdb
+import time
+
+nnue = cdll.LoadLibrary("./nnue-probe/src/libnnueprobe.so")
+
+nnue.nnue_init(b"nn-vdv.nnue")
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
 ###############################################################################
 
+## changing these values seem to trigger strange crashes in checkmating situations. best to keep this the same as what you want this engine for really is the NNUE
 piece = { 'P': 100, 'N': 280, 'B': 320, 'R': 479, 'Q': 929, 'K': 60000 }
 pst = {
     'P': (   0,   0,   0,   0,   0,   0,   0,   0,
@@ -74,6 +82,20 @@ for k, table in pst.items():
 # Our board is represented as a 120 character string. The padding allows for
 # fast detection of moves that don't stay within the board.
 A1, H1, A8, H8 = 91, 98, 21, 28
+
+squares = {
+    21: "a8", 22: "b8", 23: "c8", 24: "d8", 25: "e8", 26: "f8", 27: "g8", 28: "h8",
+    31: "a7", 32: "b7", 33: "c7", 34: "d7", 35: "e7", 36: "f7", 37: "g7", 38: "h7",
+    41: "a6", 42: "b6", 43: "c6", 44: "d6", 45: "e6", 46: "f6", 47: "g6", 48: "h6",
+    51: "a5", 52: "b5", 53: "c5", 54: "d5", 55: "e5", 56: "f5", 57: "g5", 58: "h5",
+    61: "a4", 62: "b4", 63: "c4", 64: "d4", 65: "e4", 66: "f4", 67: "g4", 68: "h4",
+    71: "a3", 72: "b3", 73: "c3", 74: "d3", 75: "e3", 76: "f3", 77: "g3", 78: "h3",
+    81: "a2", 82: "b2", 83: "c2", 84: "d2", 85: "e2", 86: "f2", 87: "g2", 88: "h2",
+    91: "a1", 92: "b1", 93: "c1", 94: "d1", 95: "e1", 96: "f1", 97: "g1", 98: "h1",
+    0: "-"
+}
+
+
 initial = (
     '         \n'  #   0 -  9
     '         \n'  #  10 - 19
@@ -112,7 +134,7 @@ MATE_UPPER = piece['K'] + 10*piece['Q']
 TABLE_SIZE = 1e7
 
 # Constants for tuning search
-QS_LIMIT = 219
+QS_LIMIT = 213
 EVAL_ROUGHNESS = 13
 DRAW_TEST = True
 
@@ -130,6 +152,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     ep - the en passant square
     kp - the king passant square
     """
+    # side_to_move = 1
 
     def gen_moves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
@@ -157,6 +180,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 
     def rotate(self):
         ''' Rotates the board, preserving enpassant '''
+        # self.side_to_move = 2
         return Position(
             self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
             119-self.ep if self.ep else 0,
@@ -171,59 +195,158 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     def move(self, move):
         i, j = move
         p, q = self.board[i], self.board[j]
-        put = lambda board, i, p: board[:i] + p + board[i+1:]
-        # Copy variables and reset ep and kp
-        board = self.board
-        wc, bc, ep, kp = self.wc, self.bc, 0, 0
+        
         score = self.score + self.value(move)
-        # Actual move
-        board = put(board, j, board[i])
-        board = put(board, i, '.')
+
+        board, ep, wc, bc, kp = self.set_board(self.board, i, j, p, q)
+
+        # We rotate the returned position, so it's ready for the next player
+        return Position(board, score, wc, bc, ep, kp).rotate()
+
+    def set_start_board(self, board):
+        return board, self.ep, self.wc, self.bc
+
+    def set_board(self, board, i, j, p, q):
+        put = lambda board, i, p: board[:i] + p + board[i+1:]
+        end_board = board
+        end_wc, end_bc, end_ep, end_kp = self.wc, self.bc, 0, 0
+        # continue preparing end fen
+        # board post move
+        end_board = put(end_board, j, end_board[i])
+        end_board = put(end_board, i, '.')
+
+        # continue preparing end fen
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: wc = (False, wc[1])
-        if i == H1: wc = (wc[0], False)
-        if j == A8: bc = (bc[0], False)
-        if j == H8: bc = (False, bc[1])
+        if i == A1: end_wc = (False, end_wc[1])
+        if i == H1: end_wc = (end_wc[0], False)
+        if j == A8: end_bc = (end_bc[0], False)
+        if j == H8: end_bc = (False, end_bc[1])
+
+        # continue preparing end fen
         # Castling
         if p == 'K':
-            wc = (False, False)
+            end_wc = (False, False)
             if abs(j-i) == 2:
-                kp = (i+j)//2
-                board = put(board, A1 if j < i else H1, '.')
-                board = put(board, kp, 'R')
+                end_kp = (i+j)//2
+                end_board = put(end_board, A1 if j < i else H1, '.')
+                end_board = put(end_board, end_kp, 'R')
+
+        # final stretch of end fen
         # Pawn promotion, double move and en passant capture
         if p == 'P':
             if A8 <= j <= H8:
-                board = put(board, j, 'Q')
+                end_board = put(end_board, j, 'Q')
             if j - i == 2*N:
-                ep = i + N
+                end_ep = i + N
             if j == self.ep:
-                board = put(board, j+S, '.')
-        # We rotate the returned position, so it's ready for the next player
-        return Position(board, score, wc, bc, ep, kp).rotate()
+                end_board = put(end_board, j+S, '.')
+
+        return end_board, end_ep, end_wc, end_bc, end_kp
+
+    def handcrafted_value(self, i, j, p, q):
+        # hce value eval
+        hce_score = pst[p][j] - pst[p][i]
+
+        if q.islower():
+            hce_score += pst[q.upper()][119-j]
+
+        # hce - Castling check detection
+        if abs(j-self.kp) < 2:
+            hce_score+= pst['K'][119-j]
+        # hce - Castling
+        if p == 'K' and abs(i-j) == 2:
+            hce_score+= pst['R'][(i+j)//2]
+            hce_score-= pst['R'][A1 if j < i else H1]
+        # hce - Special pawn stuff
+        if p == 'P':
+            if A8 <= j <= H8:
+                hce_score+= pst['Q'][j] - pst['P'][j]
+            if j == self.ep:
+                hce_score+= pst['P'][119-(j+S)]
+
+        return hce_score
 
     def value(self, move):
         i, j = move
         p, q = self.board[i], self.board[j]
-        # Actual move
-        score = pst[p][j] - pst[p][i]
-        # Capture
-        if q.islower():
-            score += pst[q.upper()][119-j]
-        # Castling check detection
-        if abs(j-self.kp) < 2:
-            score += pst['K'][119-j]
-        # Castling
-        if p == 'K' and abs(i-j) == 2:
-            score += pst['R'][(i+j)//2]
-            score -= pst['R'][A1 if j < i else H1]
-        # Special pawn stuff
-        if p == 'P':
-            if A8 <= j <= H8:
-                score += pst['Q'][j] - pst['P'][j]
-            if j == self.ep:
-                score += pst['P'][119-(j+S)]
+        
+        # intiialize boards for fen generation
+        start_board, start_ep, start_wc, start_bc = self.set_start_board(self.board)
+        end_board, end_ep, end_wc, end_bc, _ = self.set_board(self.board, i, j, p, q)
+
+        hce_score = self.handcrafted_value(i, j, p, q)
+
+        # ensure that the game is not over by checking if the kings are still there
+        # default to hce_score in a checkmate situation because NNUE doesn't have material value for the king
+        if "K" in end_board and "k" in end_board and (hce_score < MATE_LOWER and hce_score > -MATE_LOWER):
+
+            start_fen = self.fen(start_board, start_ep, start_wc, start_bc, white=True)
+            end_fen = self.fen(end_board, end_ep, end_wc, end_bc, white=False)
+
+            start_score = nnue.nnue_evaluate_fen(bytes(start_fen, encoding='utf-8'))/2.08
+            end_score = nnue.nnue_evaluate_fen(bytes(end_fen, encoding='utf-8'))/-2.08
+
+            score = end_score - start_score
+        else:
+            score = hce_score
+
         return score
+
+    def fen(self, board, ep, wc, bc, white=False):
+        pieces = "rnbqkpRNBQKP"
+        sq = 0
+        fen = ""
+        free_sq = 0
+        last_char = ""
+
+        for char in board:
+            if sq % 8 == 0:
+                free_sq = 0
+            if char != " " and char != "\n":
+                if char == ".":
+                    last_char = char
+                    sq += 1
+                    free_sq += 1
+                    if sq == 64:
+                        fen += f"{free_sq}"
+                if char in pieces:
+                    if last_char == ".":
+                        fen += f"{free_sq}"
+                        free_sq = 0
+                    last_char = char
+                    fen += char
+                    sq += 1
+                if sq % 8 == 0:
+                    if sq != 64:
+                      if last_char == ".":
+                          fen += f"{free_sq}"
+                      fen += "/"
+                      last_char = "/"
+
+        if white:
+            fen += " w "
+        else:
+            fen += " b "
+
+        if wc[0] == False and wc[1] == False and bc[0] == False and bc[1] == False:
+            fen += "-"
+        if wc[0] == True:
+            fen += "K"
+        if wc[1] == True:
+            fen += "Q"
+        if bc[0] == True:
+            fen += "k"
+        if bc[1] == True:
+            fen += "q"
+
+        en_pass = squares[int(ep)]
+
+        fen += f' {en_pass}'
+        fen += ' - -'
+
+        return fen
+
+
 
 ###############################################################################
 # Search logic
@@ -353,7 +476,7 @@ class Searcher:
 
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
-        for depth in range(1, 1000):
+        for depth in range(1, 500):
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but play tests show a margin of 20 plays

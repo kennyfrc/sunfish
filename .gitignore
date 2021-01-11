@@ -46,3 +46,18 @@ profile.pstats
 
 # Vim
 *.swp
+
+# DS Store
+.DS_Store
+
+nnue-probe/src/*.o
+nnue-probe/src/*.so
+
+board_parser.py
+
+.venv
+
+networks/
+
+*bin
+*nnue
