@@ -3,7 +3,7 @@ import chess.pgn
 import chess.engine
 
 engine_w = chess.engine.SimpleEngine.popen_uci("./uci.py")
-engine_b = chess.engine.SimpleEngine.popen_uci("./../sunfish-2/uci.py")
+engine_b = chess.engine.SimpleEngine.popen_uci("./../sunfish-nnue-2/uci.py")
 
 n = 50
 

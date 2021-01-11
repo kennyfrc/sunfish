@@ -1,4 +1,4 @@
-#!/usr/local/bin/pypy3
+#!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
@@ -138,14 +138,14 @@ def main():
             entry = searcher.tp_score.get((pos, sdepth, True))
             m, s = searcher.tp_move.get(pos), entry.lower
             # We only resign once we are mated.. That's never?
-            if s == -sunfish.MATE_UPPER:
-                output('resign')
+            # if s == -sunfish.MATE_UPPER:
+            #     output('resign')
+            # else:
+            moves = moves.split(' ')
+            if len(moves) > 1:
+                output(f'bestmove {moves[0]} ponder {moves[1]}')
             else:
-                moves = moves.split(' ')
-                if len(moves) > 1:
-                    output(f'bestmove {moves[0]} ponder {moves[1]}')
-                else:
-                    output('bestmove ' + moves[0])
+                output('bestmove ' + moves[0])
 
         elif smove.startswith('time'):
             our_time = int(smove.split()[1])
